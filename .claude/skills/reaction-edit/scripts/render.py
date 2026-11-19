@@ -51,7 +51,7 @@ def captions(pieces, words, y, font, size, path):
         if p["type"] == "clip":
             if cur: runs.append(cur); cur = []
             t_out += p["_dur"]; continue
-        ws = p.get("words") or [by_id[i] for i in range(p["first"], p["last"] + 1) if i in by_id]
+        ws = p["words"] if "words" in p else [by_id[i] for i in range(p["first"], p["last"] + 1) if i in by_id]
         for w in ws:
             cur.append({"text": w.get("caption", w["w"]), "raw": w["w"],
                         "s": t_out + max(0, w["start"] - p["in"]), "e": t_out + min(p["_dur"], w["end"] - p["in"]),

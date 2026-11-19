@@ -150,7 +150,18 @@ def main():
     for i, w in enumerate(words): w["i"] = i
     seg_words = {}
     for w in words: seg_words.setdefault(w["seg"], []).append(w)
-    segs = [s for s in segs if (s[0], s[1]) in seg_words]           # drop wordless noise
+    # A burst with no word of its own is kept when it touches speech (it is the end or
+    # start of a neighbouring word, e.g. "what | happens"); only isolated bursts are noise.
+    keep = []
+    for k, sg in enumerate(segs):
+        key = (sg[0], sg[1])
+        if key in seg_words:
+            keep.append(sg); continue
+        nb = [segs[j] for j in (k - 1, k + 1) if 0 <= j < len(segs) and (segs[j][0], segs[j][1]) in seg_words
+              and (abs(segs[j][1] - sg[0]) < 0.25 or abs(sg[1] - segs[j][0]) < 0.25)]
+        if nb:
+            seg_words[key] = []; keep.append(sg)
+    segs = keep
 
     # ---- apply word cuts by splitting segments at the quietest frame between words
     cut = ids(a.cut)
@@ -175,7 +186,7 @@ def main():
                 cur_s = quiet_between(w["start"] + 0.05, nxt["start"] + 0.1) if nxt else e
                 continue
             cur_w.append(w)
-        if cur_w: pieces_me.append([cur_s, e, cur_w])
+        if cur_w or not ws: pieces_me.append([cur_s, e, cur_w])
 
     # ---- assemble timeline
     items = [("me", p[0], p) for p in pieces_me] + [("clip", r["me_start"], r) for r in runs_clip]
@@ -188,7 +199,8 @@ def main():
             pieces.append({"type": "clip", "clip_in": o["clip_start"], "clip_out": o["clip_end"]})
             continue
         s, e, ws = o
-        if e - s < 0.35:   # tiny piece: keep it only if, heard on its own, it is a real word
+        near = [q for q in pieces_me if q is not o and (abs(q[0] - e) < 0.25 or abs(s - q[1]) < 0.25)]
+        if e - s < 0.35 and not near:   # isolated tiny piece: keep it only if, heard alone, it is a real word
             alone = [w["w"].lower().strip(".,!?'\" ") for w in transcribe(rec, me, s, e)]
             if not [x for x in alone if x not in FILLERS]:
                 print(f"dropped filler/noise piece {s:.2f}-{e:.2f}: {alone}"); continue
@@ -233,7 +245,7 @@ def main():
             else:                     # paused in a silence: trim the silence on both sides
                 g0, g1 = gap_edges(B)
                 prev["clip_out"] = round(g0 + 0.08, 3); p["clip_in"] = round(max(g0 + 0.08, g1 - 0.03), 3)
-        elif p["clip_in"] > 0 and not speech_at(p["clip_in"]):
+        elif not speech_at(p["clip_in"]):   # silent lead-in (also at 0:00) is trimmed
             p["clip_in"] = round(max(gap_edges(p["clip_in"])[1] - 0.03, 0), 3)
         nxt = clips[k + 1] if k + 1 < len(clips) else None
         if not (nxt and abs(nxt["clip_in"] - p["clip_out"]) < 0.4) and not speech_at(p["clip_out"] - 0.01):

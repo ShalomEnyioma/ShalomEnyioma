@@ -121,6 +121,7 @@ def align(me, cl, win_s=1.0, hop_s=0.25, thr=0.3, min_hits=5, ext_thr=0.18):
             if fine(t, off) >= 0.25: first_ok = t
             t -= fh
         if first_ok is not None: r["me_start"] = round(first_ok, 2)
+    out = [r for r in out if r["me_end"] - r["me_start"] >= 1.5]   # shorter 'matches' are chance (e.g. her own voice)
     prev_end = -1.0
     for r in out:
         r["clip_start"] = round(max(0.0, r["me_start"] - r["offset"]), 2)
