@@ -41,7 +41,7 @@ def ass_time(t):
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
-def captions(pieces, words, y, font, size, path):
+def captions(pieces, words, y, font, size, path, x=540):
     by_id = {w["i"]: w for w in words}
     ev, t_out = [], 0.0
     # Words of consecutive creator pieces flow together (a jump cut inside a sentence
@@ -90,7 +90,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(head)
         for s, e, t in ev:
             if e - s < 0.05: continue
-            f.write(f"Dialogue: 0,{ass_time(s)},{ass_time(e)},Cap,,0,0,0,,{{\\pos(540,{y})}}{t}\n")
+            f.write(f"Dialogue: 0,{ass_time(s)},{ass_time(e)},Cap,,0,0,0,,{{\\pos({x},{y})}}{t}\n")
     return len(ev)
 
 
@@ -120,7 +120,9 @@ def main():
     face = edl.get("face") or {}
     y = a.caption_y or max(260, (face.get("head_top") or 600) - 30)
     ass = os.path.join(W, "captions.ass")
-    n_caps = captions(pieces, an["words"], y, a.font, a.size, ass)
+    # centre the caption over her head (she isn't always in the middle of the frame)
+    x = int(min(780, max(300, face.get("x", 270) + face.get("w", 540) / 2))) if face else 540
+    n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x)
     # filter graph
     nm = sum(p["type"] == "me" for p in pieces); nc = len(pieces) - nm
     g = [f"[0:v]split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else "[0:v]null[mv0]",
