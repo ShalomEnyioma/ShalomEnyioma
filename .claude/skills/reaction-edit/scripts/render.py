@@ -107,7 +107,9 @@ def main():
     an = json.load(open(os.path.join(W, "analysis.json")))
     me_m, cl_m = os.path.join(W, "me_mezz.mkv"), os.path.join(W, "clip_mezz.mkv")
     mezzanine(edl["reaction"], me_m, a.preview)
-    mezzanine(edl["clip"], cl_m, a.preview)
+    has_clip = bool(edl.get("clip"))           # captions-only videos have no clip
+    if has_clip:
+        mezzanine(edl["clip"], cl_m, a.preview)
     pieces = edl["pieces"]
     for p in pieces:
         if p["type"] == "me":
@@ -125,6 +127,7 @@ def main():
          f"[0:a]asplit={nm}" + "".join(f"[ma{i}]" for i in range(nm)) if nm > 1 else "[0:a]anull[ma0]",
          f"[1:v]split={nc}" + "".join(f"[cv{i}]" for i in range(nc)) if nc > 1 else "[1:v]null[cv0]",
          f"[1:a]asplit={nc}" + "".join(f"[ca{i}]" for i in range(nc)) if nc > 1 else "[1:a]anull[ca0]"]
+    if nc == 0: g = g[:2]
     cat, im, ic = "", 0, 0
     for k, p in enumerate(pieces):
         if p["type"] == "me":
@@ -139,7 +142,7 @@ def main():
     g.append(f"{cat}concat=n={len(pieces)}:v=1:a=1[vc][ac]")
     g.append(f"[vc]subtitles={ass}:fontsdir={a.fontsdir}[vout]")
     g.append("[ac]alimiter=limit=0.95[aout]")
-    sh(["ffmpeg", "-y", "-i", me_m, "-i", cl_m, "-filter_complex", ";".join(g), "-map", "[vout]", "-map", "[aout]",
+    sh(["ffmpeg", "-y", "-i", me_m] + (["-i", cl_m] if has_clip else []) + ["-filter_complex", ";".join(g), "-map", "[vout]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "ultrafast" if a.preview else "medium", "-crf", "28" if a.preview else "19",
         "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(FPS),
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", a.out])

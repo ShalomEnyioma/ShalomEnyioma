@@ -1,6 +1,6 @@
 ---
 name: reaction-edit
-description: Edit a raw talking-head REACTION recording into a finished 9:16 reaction video. Cuts every silence (strictly, on the audio) and wrong takes, keeps the "watch this with me" reaction intro, replaces the parts where the creator played the clip into the mic with the ORIGINAL clip full-screen, and adds captions just above the creator's head. Use when the user asks to edit a reaction video, or drops a reaction recording plus the clip it reacts to (e.g. in the Drive "CONTENT CREATION/TO BE EDITED" folder).
+description: Edit the creator's TikTok recordings. Reaction mode (recording + clip): edit a raw talking-head REACTION recording into a finished 9:16 reaction video. Cuts every silence (strictly, on the audio) and wrong takes, keeps the "watch this with me" reaction intro, replaces the parts where the creator played the clip into the mic with the ORIGINAL clip full-screen, and adds captions just above the creator's head. Captions-only mode (a talking-head recording with NO clip): add captions and nothing else. Use when the user asks to edit a reaction video or caption a talking-head video, or drops a reaction recording plus the clip it reacts to (e.g. in the Drive "CONTENT CREATION/TO BE EDITED" folder).
 ---
 
 # Reaction video editor
@@ -14,6 +14,24 @@ description: Edit a raw talking-head REACTION recording into a finished 9:16 rea
 5. **Ratio 9:16** (1080x1920, 30 fps).
 6. **Captions only on the creator's speech**, positioned **just above her head**, 1 to 3 words at a time. No captions over the clip (it has its own).
 7. That's all. No music, zooms, sound effects, B-roll or transitions unless the user asks.
+
+## Two modes
+
+| What she uploads | Mode | What to do |
+|---|---|---|
+| A recording **plus** the clip it reacts to | **Reaction** | Everything below: rules 1-7. |
+| A recording **alone** (just her talking, no clip to react to) | **Captions only** | Add captions, and that is all: no cuts, no silence removal, nothing added. The video plays exactly as recorded. |
+
+### Captions-only mode
+
+```bash
+python3 -I $SK/captions_only.py video.mp4 WORK --models "$MODELS"          # prints WORDS [id|time]word
+python3 -I $SK/captions_only.py video.mp4 WORK --models "$MODELS" --say 37=eight --say 38=ball. --say 56=
+python3 -I $SK/render.py WORK "<name> - EDITED.mp4"
+```
+- Same caption style and position as reaction mode (1-3 words, just above her head, Inter Black, white with black outline).
+- Review the WORDS like an editor: fix accent mishearings (cross-check doubtful lines with whisper small.en), and hide stammered or restarted words in the captions only (`--say ID=`). The audio and video are never changed.
+- Check: duration equals the original, frames show captions above the head, then deliver as usual.
 
 ## Inputs
 
