@@ -33,6 +33,10 @@ python3 -I $SK/render.py WORK "<name> - EDITED.mp4"
 - Review the WORDS like an editor: fix accent mishearings (cross-check doubtful lines with whisper small.en), and hide stammered or restarted words in the captions only (`--say ID=`). The audio and video are never changed.
 - Check: duration equals the original, frames show captions above the head, then deliver as usual.
 
+## The clip must be the ORIGINAL
+
+If the uploaded clip is someone else's reaction to a video (another person talking over it, an inset, a screen recording of TikTok, a repost or compilation), do NOT use it. Find the original post that footage came from and edit with that: see `references/find-original.md` (search, download through the Composio workbench, save "<title> (original).mp4" to TO BE EDITED, confirm by frames). Credit the original poster.
+
 ## Inputs
 
 Two files per video, normally in Drive `CONTENT CREATION/TO BE EDITED`:
