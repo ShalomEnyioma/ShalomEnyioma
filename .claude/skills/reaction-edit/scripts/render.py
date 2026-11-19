@@ -44,27 +44,29 @@ def ass_time(t):
 def captions(pieces, words, y, font, size, path):
     by_id = {w["i"]: w for w in words}
     ev, t_out = [], 0.0
+    # Words of consecutive creator pieces flow together (a jump cut inside a sentence
+    # must not leave a lone word on screen); a clip piece ends the run.
+    runs, cur = [], []
     for p in pieces:
         if p["type"] == "clip":
+            if cur: runs.append(cur); cur = []
             t_out += p["_dur"]; continue
         ws = p.get("words") or [by_id[i] for i in range(p["first"], p["last"] + 1) if i in by_id]
-        chunk = []
-        def flush(end_override=None):
-            if not chunk: return
-            s = t_out + max(0, chunk[0]["start"] - p["in"])
-            e = t_out + min(p["_dur"], (end_override if end_override is not None else chunk[-1]["end"]) - p["in"])
-            text = " ".join(c.get("caption", c["w"]) for c in chunk if c.get("caption", c["w"])).strip(" ,")
-            if not text: chunk.clear(); return
-            ev.append((s, e, text)); chunk.clear()
-        for k, w in enumerate(ws):
-            chunk.append(w)
-            text = " ".join(c["w"] for c in chunk)
-            punct = w["w"][-1:] in ",.!?"
-            if len(chunk) >= 3 or len(text) >= 14 or punct:
-                nxt = ws[k + 1]["start"] if k + 1 < len(ws) else p["out"]
-                flush(nxt)
-        flush(p["out"])
+        for w in ws:
+            cur.append({"text": w.get("caption", w["w"]), "raw": w["w"],
+                        "s": t_out + max(0, w["start"] - p["in"]), "e": t_out + min(p["_dur"], w["end"] - p["in"]),
+                        "piece_end": t_out + p["_dur"]})
         t_out += p["_dur"]
+    if cur: runs.append(cur)
+    for run in runs:
+        chunk = []
+        for k, w in enumerate(run):
+            if w["text"]: chunk.append(w)
+            text = " ".join(c["text"] for c in chunk)
+            last = k + 1 == len(run)
+            if chunk and (len(chunk) >= 3 or len(text) >= 14 or w["raw"][-1:] in ",.!?" or last):
+                e = run[k + 1]["s"] if not last else w["piece_end"]
+                ev.append((chunk[0]["s"], e, text.strip(" ,"))); chunk = []
     # no gaps/overlaps between consecutive caption events inside one piece
     for k in range(len(ev) - 1):
         if 0 < ev[k + 1][0] - ev[k][1] < 0.25:

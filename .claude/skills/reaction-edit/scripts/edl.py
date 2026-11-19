@@ -101,6 +101,7 @@ def main():
     ap.add_argument("--cut-time", default="", help="rec-time ranges to remove, e.g. 82.9-86.6,90-91.2")
     ap.add_argument("--say", action="append", default=[], help="ID=TEXT caption fix; ID= hides the word")
     ap.add_argument("--bridge", type=float, default=0.07)
+    ap.add_argument("--clip-no-trim", action="store_true", help="never trim clip edges (auto when the clip has no speech)")
     ap.add_argument("--pre", type=float, default=0.02)
     ap.add_argument("--post", type=float, default=0.04)
     ap.add_argument("--models", default=os.environ.get("REACTION_MODELS", os.path.expanduser("~/.cache/reaction-edit/models")))
@@ -212,6 +213,16 @@ def main():
         while j < len(loud) and not loud[j]: j += 1
         return i * 0.01, j * 0.01
     clips = [p for p in pieces if p["type"] == "clip"]
+    # music-only clip (no talking): its pictures carry the story, so never trim it; pieces
+    # that she paused between are joined exactly at the pause
+    clip_words = transcribe(rec, cl, 0, min(len(cl) / SR, 20.0))
+    music_only = a.clip_no_trim or len(clip_words) < 3
+    if music_only:
+        print("clip has no speech: clip edges are not trimmed")
+        for k in range(1, len(clips)):
+            if abs(clips[k]["clip_in"] - clips[k - 1]["clip_out"]) < 0.6:
+                clips[k]["clip_in"] = clips[k - 1]["clip_out"]
+        clips = []
     for k, p in enumerate(clips):
         prev = clips[k - 1] if k else None
         joined = prev is not None and abs(p["clip_in"] - prev["clip_out"]) < 0.4

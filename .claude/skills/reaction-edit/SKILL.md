@@ -48,7 +48,9 @@ Read the analyze.py transcript top to bottom like an editor:
 - **Instructions to the editor said on camera** ("cut that part", "remove this", "start again"): cut the instruction AND the flubbed line it refers to.
 - **Clip edges**: check each clip piece's in/out against the clip's own word timings (run `analyze.py`'s parakeet on clip.wav, or peek at a few seconds). The first clip usually starts at 0:00 even if detection says ~1 s; never start or end a clip piece mid-word.
 - **Short replays** (under ~1.5 s, too short to auto-detect; her audio is quiet like the playback, ~1/3 of her own voice level): she held the mic up, so she wants it heard. Add it to `clip_runs` in `analysis.json` (find its clip time by cross-correlating that second against clip.wav) so it plays as a full-screen clip moment, like the rest of the clip.
-- **Caption spelling**: the ASR is English-only. Fix Nigerian words and mishearings with `--say` (e.g. `--say 30=Money --say 76=Omo, --say 77=` where an empty value hides a word). This changes captions only, never the audio.
+- **Music-only clips** (no one talking, e.g. an animal video with a song): edl.py detects this and never trims the clip edges; pieces she paused between are joined exactly, so no footage is lost.
+- **Asides** ("what am I saying?", talking to someone off camera, usually quieter than her normal voice): cut them, like an editor instruction. Re-check doubtful lines with the second model (whisper small.en) before deciding.
+- **Caption spelling**: the ASR is English-only. In her accent "eagle" comes out as "ego"/"Igolo"; fix every one. Fix Nigerian words and mishearings with `--say` (e.g. `--say 30=Money --say 76=Omo, --say 77=` where an empty value hides a word). This changes captions only, never the audio.
 - Never cut the creator's actual opinion, story or punchline to shorten the video.
 
 ### Check before delivering
