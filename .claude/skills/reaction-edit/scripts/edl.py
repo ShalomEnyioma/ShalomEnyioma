@@ -157,7 +157,9 @@ def main():
         key = (sg[0], sg[1])
         if key in seg_words:
             keep.append(sg); continue
+        cut_ids = ids(a.cut)
         nb = [segs[j] for j in (k - 1, k + 1) if 0 <= j < len(segs) and (segs[j][0], segs[j][1]) in seg_words
+              and any(w["i"] not in cut_ids for w in seg_words[(segs[j][0], segs[j][1])])   # touches KEPT speech
               and (abs(segs[j][1] - sg[0]) < 0.25 or abs(sg[1] - segs[j][0]) < 0.25)]
         if nb:
             seg_words[key] = []; keep.append(sg)
