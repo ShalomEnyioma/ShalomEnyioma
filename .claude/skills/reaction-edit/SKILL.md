@@ -15,6 +15,16 @@ description: Edit the creator's TikTok recordings. Reaction mode (recording + cl
 6. **Captions only on the creator's speech**, positioned **just above her head**, 1 to 3 words at a time. No captions over the clip (it has its own).
 7. That's all. No music, zooms, sound effects, B-roll or transitions unless the user asks.
 
+## One video at a time (creator's rule)
+
+When there are several videos to edit, do them strictly ONE AFTER ANOTHER:
+1. Edit video 1 completely.
+2. Cross-check it against EVERY rule (silence check, word check for clipped/missing words, clip is the original and fills the frame, intro kept, only clear wrong takes cut, captions above the head, 9:16, ffprobe, frames).
+3. Fix anything that fails and re-check.
+4. Send it to the chat (SendUserFile) and move its raw files to DONE.
+5. Only then start video 2.
+Never batch-render several and check afterwards; never start the next one while the current one has an open problem.
+
 ## Two modes
 
 | What she uploads | Mode | What to do |
