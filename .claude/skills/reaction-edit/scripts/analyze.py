@@ -301,7 +301,7 @@ def main():
                 break
     prev = None
     for r in runs:   # tiny gaps between consecutive clip pieces: keep the clip continuous
-        if r["clip_start"] < 1.0 and prev is None: r["clip_start"] = 0.0
+        if r["clip_start"] < 2.0 and prev is None: r["clip_start"] = 0.0
         if prev is not None and 0 < r["clip_start"] - prev["clip_end"] < 1.0: r["clip_start"] = prev["clip_end"]
         prev = r
     # speaker regions = everything outside clip runs

@@ -44,6 +44,10 @@ Read the analyze.py transcript top to bottom like an editor:
 - **Wrong takes**: a phrase said twice, a restart ("when you have bigger ones, bigger amounts of money" -> cut "bigger ones,"), a sentence abandoned midway. `--cut` the ids of the discarded version.
 - **Listen lines**: confirm the ~~struck~~ words are only the listen instruction. `--keep` anything wrongly struck; `--cut` any listen line it missed.
 - **Clip runs**: each should match a moment she played the clip. If a run is missing or extra, fix `clip_runs` in `analysis.json` (rec start/end, clip start/end) and rerun edl.py.
+- **Instructions to the editor said on camera** ("cut that part", "remove this", "start again"): cut the instruction AND the flubbed line it refers to.
+- **Listen lines inside a useful sentence**: the auto-strike takes the whole clause. "I want you to watch this clip with me, but we're going to come from a different perspective" -> cut only up to "but", `--keep` the rest (and `--say` a capital on the new first word).
+- **Clip edges**: check each clip piece's in/out against the clip's own word timings (run `analyze.py`'s parakeet on clip.wav, or peek at a few seconds). The first clip usually starts at 0:00 even if detection says ~1 s; never start or end a clip piece mid-word.
+- **Short replays** (under ~1.5 s, too short to auto-detect; her audio is quiet like the playback, ~1/3 of her own voice level): usually she paused too early and replayed the line. Prefer letting the main clip piece run through that line and drop the replay, so it's heard once. Edit `clip_runs` in `analysis.json` (`clip_start`/`clip_end`) and `--cut` the replay's words.
 - **Caption spelling**: the ASR is English-only. Fix Nigerian words and mishearings with `--say` (e.g. `--say 30=Money --say 76=Omo, --say 77=` where an empty value hides a word). This changes captions only, never the audio.
 - Never cut the creator's actual opinion, story or punchline to shorten the video.
 
