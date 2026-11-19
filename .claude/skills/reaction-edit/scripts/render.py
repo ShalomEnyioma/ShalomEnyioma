@@ -64,7 +64,7 @@ def captions(pieces, words, y, font, size, path, x=540):
             if w["text"]: chunk.append(w)
             text = " ".join(c["text"] for c in chunk)
             last = k + 1 == len(run)
-            if chunk and (len(chunk) >= 3 or len(text) >= 14 or w["raw"][-1:] in ",.!?" or last):
+            if chunk and (len(chunk) >= 3 or len(text) >= 14 or w["raw"][-1:] in ".!?" or (w["raw"][-1:] == "," and len(chunk) >= 2) or last):
                 e = run[k + 1]["s"] if not last else w["piece_end"]
                 ev.append((chunk[0]["s"], e, text.strip(" ,"))); chunk = []
     # no gaps/overlaps between consecutive caption events inside one piece

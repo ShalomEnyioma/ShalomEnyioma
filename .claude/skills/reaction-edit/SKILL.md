@@ -66,7 +66,7 @@ python3 -I $SK/analyze.py reaction.mp4 clip.mp4 WORK --models "$MODELS"
 #   finds the CLIP runs (rec time -> clip time) and the face/caption position
 python3 -I $SK/edl.py WORK --models "$MODELS"
 #   cuts on the audio and prints WORDS as [id|time]word plus the piece list. Nothing is cut yet
-python3 -I $SK/edl.py WORK --models "$MODELS" --cut <ids> --say <id=Text> ...
+python3 -I $SK/edl.py WORK --models "$MODELS" --cut 9-30,82-88 --say <id=Text> ...   # ids/ranges comma-separated in ONE --cut
 #   ids come from THIS script's WORDS line (they change whenever clip_runs change: re-read them)
 python3 -I $SK/render.py WORK "OUT.mp4"                       # ~1 min after the first run
 python3 -I $SK/check_gaps.py OUT.mp4 -45                      # must print "none" for her pieces
