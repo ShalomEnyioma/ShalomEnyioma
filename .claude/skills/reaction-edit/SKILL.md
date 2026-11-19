@@ -102,6 +102,7 @@ Read the analyze.py transcript top to bottom like an editor:
 
 - Send the MP4 to the user with `SendUserFile` (display: render). Name it `<original name> - EDITED.mp4`.
 - Drive connector uploads are capped at 10 MB, so a finished video usually can't go back to Drive from here. Say so; don't re-encode it to a lower quality just to fit unless the user asks.
+- Add a row to the record sheet "Edited Videos Record" (Sheets artifact https://claude.ai/artifact/VA6ARh4Aaue4y9KHD53L5n, Claude Docs project e404c207-18f6-4252-9639-2cf8fa8e93d1, sheet "Videos"): #, title, status Edited, mode, date, raw sec, edited sec, clip used/credit, what was cut, captions to check, notes. Write under the last record, never over a filled row.
 - Report: final length vs raw length, what was cut (listen lines, wrong takes), and any caption words you corrected.
 
 ## How it works (for debugging)
