@@ -47,7 +47,7 @@ def captions(pieces, words, y, font, size, path):
     for p in pieces:
         if p["type"] == "clip":
             t_out += p["_dur"]; continue
-        ws = [by_id[i] for i in range(p["first"], p["last"] + 1) if i in by_id and not by_id[i].get("_drop")]
+        ws = p.get("words") or [by_id[i] for i in range(p["first"], p["last"] + 1) if i in by_id]
         chunk = []
         def flush(end_override=None):
             if not chunk: return
