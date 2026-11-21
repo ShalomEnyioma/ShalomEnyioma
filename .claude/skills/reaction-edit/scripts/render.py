@@ -36,6 +36,34 @@ def mezzanine(src, dst, preview):
         "-c:a", "pcm_s16le", "-fps_mode", "cfr", dst])
 
 
+def content_crop_y(path):
+    """Top of a 1080x1350 (4:5) window over the part of a 1080x1920 clip that has picture: rows that are
+    near-black/flat in every sampled frame (letterbox bars) are skipped, and the window is centred on the rest."""
+    import numpy as np
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                               capture_output=True, text=True).stdout.strip() or 10)
+    rows = []
+    for t in np.linspace(0.1, 0.9, 7) * dur:
+        r = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.2f}", "-i", path, "-frames:v", "1", "-vf", "scale=108:192,format=gray",
+                            "-f", "rawvideo", "-"], capture_output=True)
+        if len(r.stdout) == 108 * 192:
+            rows.append(np.frombuffer(r.stdout, np.uint8).reshape(192, 108).astype(float))
+    if not rows:
+        return 0.05
+    f = np.stack(rows)
+    live = (f.std(axis=2).max(axis=0) > 12) | (f.mean(axis=2).max(axis=0) > 40)   # any frame shows detail/light on this row
+    idx = np.where(live)[0]
+    if len(idx) == 0:
+        return 0.05
+    top, bot = idx[0] / 192, (idx[-1] + 1) / 192
+    win = 1350 / 1920
+    if bot - top <= win:
+        y = (top + bot) / 2 - win / 2
+    else:
+        y = top                                     # tall picture: keep its top (captions/titles live there)
+    return float(min(max(0.0, y), 1 - win))
+
+
 def ass_time(t):
     t = max(0, t); h = int(t // 3600); m = int(t % 3600 // 60); s = t % 60
     return f"{h}:{m:02d}:{s:05.2f}"
@@ -101,11 +129,11 @@ def main():
     ap.add_argument("--font", default="Inter Black"); ap.add_argument("--size", type=int, default=88)
     ap.add_argument("--fontsdir", default="/usr/share/fonts")
     ap.add_argument("--preview", action="store_true", help="fast low-quality render")
-    ap.add_argument("--layout", choices=["full", "pip"], default="full",
+    ap.add_argument("--layout", choices=["full", "pip"], default="pip",
                     help="full: clip fills the frame. pip: she stays on screen (her footage from while the clip played) "
                          "and the clip plays in a box in the top corner away from her face, with the clip's sound")
     ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 540x675 in the top corner opposite her face)")
-    ap.add_argument("--clip-crop-y", type=float, default=0.05, help="pip: top of the clip's 4:5 crop, as a fraction of its height")
+    ap.add_argument("--clip-crop-y", type=float, default=None, help="pip: top of the clip's 4:5 crop, as a fraction of its height (default: centred on the clip's picture, skipping black bars)")
     a = ap.parse_args()
     W = a.workdir
     edl = json.load(open(os.path.join(W, "edl.json")))
@@ -138,32 +166,41 @@ def main():
         # (that shows her mouthing words with no sound, then saying them again).
         runs = an.get("clip_runs") or []
         talk = [(p["in"], p["out"]) for p in pieces if p["type"] == "me"]
-        talk += [(w["start"], w["end"]) for w in an.get("words", [])]
+        # her words outside the clip runs (inside a run, the mic is hearing the clip speaker, not her)
+        talk += [(w["start"], w["end"]) for w in an.get("words", [])
+                 if not any(r["me_start"] - 0.15 <= (w["start"] + w["end"]) / 2 <= r["me_end"] + 0.15 for r in runs)]
         bad = []
         for p in pieces:
             if p["type"] != "clip": continue
             mid = (p["clip_in"] + p["clip_out"]) / 2
-            inside = [r for r in runs if r["clip_start"] - 0.05 <= mid <= r["clip_end"] + 0.05]
+            inside = [r for r in runs if r.get("replayed_from", r["clip_start"]) - 0.05 <= mid <= r["clip_end"] + 0.05]
             r = inside[0] if inside else min(runs, key=lambda r: abs(r["clip_start"] - p["clip_in"]))
-            off = r.get("offset", r["me_start"] - r["clip_start"])   # rec time = clip time + offset
-            b0 = max(r["me_start"], p["clip_in"] + off)
-            b1 = b0 + p["_dur"]
-            if b1 > r["me_end"] + 0.1:                                  # never run past the playback into her talking
-                b0 = max(0.0, r["me_end"] - p["_dur"]); b1 = b0 + p["_dur"]
-            p["bg_in"] = q(b0)
+            # her phone may have played the clip faster/slower: map clip time -> rec time linearly over the run
+            c0 = r.get("replayed_from", r["clip_start"])
+            m0, m1 = r["me_start"] + 0.15, r["me_end"] - 0.5        # keep clear of her mouth moving into/out of a line
+            speed = max(0.5, (r["clip_end"] - c0) / max(0.5, r["me_end"] - r["me_start"]))
+            b0 = max(m0, min(m1 - 0.5, m0 + (p["clip_in"] - c0) / speed))
+            b1 = min(m1, max(b0 + 0.5, m0 + (p["clip_out"] - c0) / speed))
+            p["bg_in"], p["bg_out"] = q(b0), q(b1)          # stretched/squeezed to the clip piece's length
             hit = [t for t in talk if t[0] < b1 - 0.02 and t[1] > b0 + 0.02]
             if hit:
                 bad.append(f"clip {p['clip_in']:.2f}-{p['clip_out']:.2f}: her footage {b0:.2f}-{b1:.2f} has her talking at {hit[0][0]:.2f}-{hit[0][1]:.2f}")
         if bad:
             raise SystemExit("pip layout refused, she would be seen speaking silently under the clip:\n  " + "\n  ".join(bad)
-                             + "\nFix clip_runs (me_start/me_end/offset) or use --box with a still frame source.")
+                             + "\nFix clip_runs (me_start/me_end) so they cover only the time the clip was playing.")
         if a.box:
             bw, bh, bx, by = map(int, a.box.split(","))
         else:
-            bw, bh = 540, 675
+            # top corner opposite her face; the bottom stays above her forehead, 4:5 like the clip crop
+            by = 160
+            fy, fh = (face.get("y", 900), face.get("h", 450)) if face else (900, 450)
+            bh = int(min(860, fy + 0.2 * fh) - by) // 2 * 2
+            bw = int(bh * 4 / 5) // 2 * 2
             fx = face.get("x", 270) + face.get("w", 540) / 2 if face else 540
-            bx = 1080 - bw - 24 if fx < 540 else 24
-            by = 110
+            bx = 1080 - bw - 24 if fx <= 560 else 24
+        if a.clip_crop_y is None:
+            a.clip_crop_y = content_crop_y(cl_m)
+        print(f"pip box {bw}x{bh} at {bx},{by}, clip crop from {a.clip_crop_y:.2f} of its height")
     nma = sum(p["type"] == "me" for p in pieces)          # her audio pieces
     nm = nma + (nc if pip else 0)                          # her video pieces (+ backgrounds under pip clips)
     g = [f"[0:v]split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else "[0:v]null[mv0]",
@@ -180,8 +217,8 @@ def main():
         d = e - s
         if p["type"] == "clip" and pip:
             bg = f"mv{im}"; im += 1
-            b0 = p["bg_in"]
-            g.append(f"[{bg}]trim=start={b0}:end={b0 + d:.4f},setpts=PTS-STARTPTS[bg{k}]")
+            b0, b1 = p["bg_in"], p["bg_out"]
+            g.append(f"[{bg}]trim=start={b0}:end={b1},setpts=(PTS-STARTPTS)*{d / (b1 - b0):.5f},fps=30[bg{k}]")
             g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS,crop=1080:1350:0:{int(a.clip_crop_y * 1920)},"
                      f"scale={bw}:{bh},setsar=1[bx{k}]")
             g.append(f"[bg{k}][bx{k}]overlay={bx}:{by}:shortest=1,trim=duration={d:.4f},setpts=PTS-STARTPTS[v{k}]")

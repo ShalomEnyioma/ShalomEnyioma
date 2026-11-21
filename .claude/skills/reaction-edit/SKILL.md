@@ -10,7 +10,7 @@ description: Edit the creator's TikTok recordings. Reaction mode (recording + cl
 1. **Cut ALL silences, strictly.** Every moment she is not speaking is removed: pauses between words and sentences, looking down, moving the mic to/from the phone, putting the mic down, breaths. Boundaries are taken from the AUDIO, never from ASR word times (those drift up to 0.4 s and both leave silence in and clip words). Nothing she actually says may be clipped: let every word finish.
 2. **Cut wrong takes only when they are clearly wrong takes**: a sentence abandoned and restarted, a repeated phrase, a spoken instruction to the editor ("cut that part") together with the flubbed line it refers to. Don't cut small words, fillers inside a sentence or anything that might be intentional. When unsure, keep it and mention it.
 3. **KEEP the reaction intro** ("I want you to watch this clip with me", "I need you to watch this video with me"). It tells viewers this is a reaction video. The creator explicitly asked for it to stay. Mid-video bridging lines like "let's continue hearing what she has to say" may be cut (she approved that in the first video); if in doubt, keep and ask.
-4. **Clip parts are fully overlaid.** While the creator recorded, she held the mic to her phone so the clip's audio was captured. Those stretches mark *which part of the clip she wants heard*. In the edit they are replaced by the original clip, video AND audio, covering the whole 1080x1920 frame (no picture-in-picture, no split screen).
+4. **Clip parts play in a box while she stays on screen (coach layout, the creator's standing choice).** While she recorded, she held the mic to her phone; those stretches mark *which part of the clip she wants heard*. In the edit the ORIGINAL clip (video and its own audio) plays in a 4:5 box in the top corner away from her face, and under it she is on screen watching: her own footage from the moment that clip part was playing in her recording. When she speaks, it is her alone, full frame, with captions. (`render.py` does this by default: `--layout pip`.)
 5. **Ratio 9:16** (1080x1920, 30 fps).
 6. **Captions only on the creator's speech**, positioned **just above her head**, 1 to 3 words at a time. No captions over the clip (it has its own).
 7. That's all. No music, zooms, sound effects, B-roll or transitions unless the user asks.
@@ -20,7 +20,7 @@ description: Edit the creator's TikTok recordings. Reaction mode (recording + cl
 
 When there are several videos to edit, do them strictly ONE AFTER ANOTHER:
 1. Edit video 1 completely.
-2. Cross-check it against EVERY rule (silence check, word check for clipped/missing words, clip is the original and fills the frame, intro kept, only clear wrong takes cut, captions above the head, 9:16, ffprobe, frames).
+2. Cross-check it against EVERY rule (silence check, word check for clipped/missing words, clip is the original and plays in the box, face strip shows her only watching under the clip (rule 8), intro kept, only clear wrong takes cut, captions above the head, 9:16, ffprobe, frames).
 3. Fix anything that fails and re-check.
 4. Send it to the chat (SendUserFile) and move its raw files to DONE.
 5. Only then start video 2.
@@ -93,8 +93,9 @@ Read the analyze.py transcript top to bottom like an editor:
 - Never cut the creator's actual opinion, story or punchline to shorten the video.
 
 ### Layouts
-- `--layout full` (default): the clip fills the frame (rule 4).
-- `--layout pip` (coach style, asked for on "Final year"): she stays on screen, using her own footage from while the clip played, and the clip plays with its sound in a 4:5 box in the top corner away from her face. Default box 540x675; `--box 640,800,416,100` (W,H,X,Y) suited her usual framing. `--clip-crop-y` sets where the 4:5 crop starts. Check frames: the box must sit over the wall or her hair, never over her eyes or mouth. Then run the face-strip check from rule 8.
+- `--layout pip` (DEFAULT, the creator's standing choice since 21 Nov): she stays on screen, using her own footage from while the clip played, and the clip plays with its sound in a 4:5 box in the top corner away from her face. The box is sized automatically (top 160 px, bottom just above her forehead, 4:5) and put in the corner opposite her face; `--box W,H,X,Y` overrides. The 4:5 crop is centred on the clip's picture, skipping black bars (`--clip-crop-y` overrides). Her footage under the box is mapped from `clip_runs` by playback speed (her phone often played ~1.25x, so it is slowed to fit) and kept 0.15 s after a run starts and 0.5 s before it ends, so her mouth never moves into a line under the clip. If a clip piece runs past what she watched (e.g. the payoff added later), shorten that run's `me_end` to where she still sits watching, and the footage is stretched to cover it. render.py REFUSES to render if any footage under the box overlaps her speech (kept pieces or her words outside runs).
+- `--layout full`: the clip fills the frame. Only if she asks for it.
+- Check every pip render with a face strip (her face every ~1 s through every clip part): mouth closed or reacting (smile, frown, gasp), never talking; she must not be leaning out of frame. Also check the same clip line never plays twice (drop replay pieces that repeat a line already played). Check frames: the box must sit over the wall or her hair, never over her eyes or mouth. Then run the face-strip check from rule 8.
 
 ### Check before delivering
 
