@@ -13,8 +13,8 @@ description: Edit the creator's TikTok recordings. Reaction mode (recording + cl
 4. **Clip parts are fully overlaid.** While the creator recorded, she held the mic to her phone so the clip's audio was captured. Those stretches mark *which part of the clip she wants heard*. In the edit they are replaced by the original clip, video AND audio, covering the whole 1080x1920 frame (no picture-in-picture, no split screen).
 5. **Ratio 9:16** (1080x1920, 30 fps).
 6. **Captions only on the creator's speech**, positioned **just above her head**, 1 to 3 words at a time. No captions over the clip (it has its own).
-8. **Clip and creator never overlap.** While the clip plays, she is only watching or listening; while she speaks, the clip is not playing. She is never seen speaking without sound while the clip plays, and no line of hers is ever seen or heard twice. (In the pip layout her footage under the box must come from the exact moment that clip part was playing in her recording, never from a moment she was talking: render.py refuses otherwise. Check with a face strip: sample her face every ~1 s through every clip part and confirm her mouth is closed or reacting, not talking.)
 7. That's all. No music, zooms, sound effects, B-roll or transitions unless the user asks.
+8. **Clip and creator never overlap.** While the clip plays, she is only watching or listening; while she speaks, the clip is not playing. She is never seen speaking without sound while the clip plays, and no line of hers is ever seen or heard twice. (In the pip layout her footage under the box must come from the exact moment that clip part was playing in her recording, never from a moment she was talking: render.py refuses otherwise. Check with a face strip: sample her face every ~1 s through every clip part and confirm her mouth is closed or reacting, not talking.)
 
 ## One video at a time (creator's rule)
 
