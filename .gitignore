@@ -4,3 +4,5 @@ __pycache__/
 
 # Client work is confidential (this repo is public)
 clients/
+# Third-party transcripts (public repo)
+research/nickwinter/transcripts/
