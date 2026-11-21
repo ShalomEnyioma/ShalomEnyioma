@@ -133,11 +133,30 @@ def main():
     pip = a.layout == "pip" and has_clip
     if pip:
         # her footage under each clip piece = the moment of her recording where that clip part played
+        # RULE: while the clip plays she is only watching. Her footage under the box must come from the
+        # moment that exact clip part was playing in her recording, and must never contain her speaking
+        # (that shows her mouthing words with no sound, then saying them again).
         runs = an.get("clip_runs") or []
+        talk = [(p["in"], p["out"]) for p in pieces if p["type"] == "me"]
+        talk += [(w["start"], w["end"]) for w in an.get("words", [])]
+        bad = []
         for p in pieces:
             if p["type"] != "clip": continue
-            r = min(runs, key=lambda r: 0 if r["clip_start"] - 0.05 <= p["clip_in"] <= r["clip_end"] + 0.05 else abs(r["clip_start"] - p["clip_in"]))
-            p["bg_in"] = q(max(0.0, r["me_start"] + (p["clip_in"] - r["clip_start"])))
+            mid = (p["clip_in"] + p["clip_out"]) / 2
+            inside = [r for r in runs if r["clip_start"] - 0.05 <= mid <= r["clip_end"] + 0.05]
+            r = inside[0] if inside else min(runs, key=lambda r: abs(r["clip_start"] - p["clip_in"]))
+            off = r.get("offset", r["me_start"] - r["clip_start"])   # rec time = clip time + offset
+            b0 = max(r["me_start"], p["clip_in"] + off)
+            b1 = b0 + p["_dur"]
+            if b1 > r["me_end"] + 0.1:                                  # never run past the playback into her talking
+                b0 = max(0.0, r["me_end"] - p["_dur"]); b1 = b0 + p["_dur"]
+            p["bg_in"] = q(b0)
+            hit = [t for t in talk if t[0] < b1 - 0.02 and t[1] > b0 + 0.02]
+            if hit:
+                bad.append(f"clip {p['clip_in']:.2f}-{p['clip_out']:.2f}: her footage {b0:.2f}-{b1:.2f} has her talking at {hit[0][0]:.2f}-{hit[0][1]:.2f}")
+        if bad:
+            raise SystemExit("pip layout refused, she would be seen speaking silently under the clip:\n  " + "\n  ".join(bad)
+                             + "\nFix clip_runs (me_start/me_end/offset) or use --box with a still frame source.")
         if a.box:
             bw, bh, bx, by = map(int, a.box.split(","))
         else:

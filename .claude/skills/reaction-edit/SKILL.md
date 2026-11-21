@@ -13,6 +13,7 @@ description: Edit the creator's TikTok recordings. Reaction mode (recording + cl
 4. **Clip parts are fully overlaid.** While the creator recorded, she held the mic to her phone so the clip's audio was captured. Those stretches mark *which part of the clip she wants heard*. In the edit they are replaced by the original clip, video AND audio, covering the whole 1080x1920 frame (no picture-in-picture, no split screen).
 5. **Ratio 9:16** (1080x1920, 30 fps).
 6. **Captions only on the creator's speech**, positioned **just above her head**, 1 to 3 words at a time. No captions over the clip (it has its own).
+8. **Clip and creator never overlap.** While the clip plays, she is only watching or listening; while she speaks, the clip is not playing. She is never seen speaking without sound while the clip plays, and no line of hers is ever seen or heard twice. (In the pip layout her footage under the box must come from the exact moment that clip part was playing in her recording, never from a moment she was talking: render.py refuses otherwise. Check with a face strip: sample her face every ~1 s through every clip part and confirm her mouth is closed or reacting, not talking.)
 7. That's all. No music, zooms, sound effects, B-roll or transitions unless the user asks.
 
 ## One video at a time (creator's rule)
@@ -93,7 +94,7 @@ Read the analyze.py transcript top to bottom like an editor:
 
 ### Layouts
 - `--layout full` (default): the clip fills the frame (rule 4).
-- `--layout pip` (coach style, asked for on "Final year"): she stays on screen, using her own footage from while the clip played, and the clip plays with its sound in a 4:5 box in the top corner away from her face. Default box 540x675; `--box 640,800,416,100` (W,H,X,Y) suited her usual framing. `--clip-crop-y` sets where the 4:5 crop starts. Check frames: the box must sit over the wall or her hair, never over her eyes or mouth.
+- `--layout pip` (coach style, asked for on "Final year"): she stays on screen, using her own footage from while the clip played, and the clip plays with its sound in a 4:5 box in the top corner away from her face. Default box 540x675; `--box 640,800,416,100` (W,H,X,Y) suited her usual framing. `--clip-crop-y` sets where the 4:5 crop starts. Check frames: the box must sit over the wall or her hair, never over her eyes or mouth. Then run the face-strip check from rule 8.
 
 ### Check before delivering
 
