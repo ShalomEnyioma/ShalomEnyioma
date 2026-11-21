@@ -1,3 +1,6 @@
 studio/node_modules/
 studio/out/
 __pycache__/
+
+# Client work is confidential (this repo is public)
+clients/
