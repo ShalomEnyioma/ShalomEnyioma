@@ -91,6 +91,10 @@ Read the analyze.py transcript top to bottom like an editor:
 - **Caption spelling**: the ASR is English-only. In her accent "eagle" comes out as "ego"/"Igolo"; fix every one. Fix Nigerian words and mishearings with `--say` (e.g. `--say 30=Money --say 76=Omo, --say 77=` where an empty value hides a word). This changes captions only, never the audio.
 - Never cut the creator's actual opinion, story or punchline to shorten the video.
 
+### Layouts
+- `--layout full` (default): the clip fills the frame (rule 4).
+- `--layout pip` (coach style, asked for on "Final year"): she stays on screen, using her own footage from while the clip played, and the clip plays with its sound in a 4:5 box in the top corner away from her face. Default box 540x675; `--box 640,800,416,100` (W,H,X,Y) suited her usual framing. `--clip-crop-y` sets where the 4:5 crop starts. Check frames: the box must sit over the wall or her hair, never over her eyes or mouth.
+
 ### Check before delivering
 
 0. **Silence check**: `check_gaps.py OUT.mp4 -45` must list no gaps inside her pieces (it maps output times; compare with the piece list). Fix and re-render if it does.

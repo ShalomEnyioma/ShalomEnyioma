@@ -101,6 +101,11 @@ def main():
     ap.add_argument("--font", default="Inter Black"); ap.add_argument("--size", type=int, default=88)
     ap.add_argument("--fontsdir", default="/usr/share/fonts")
     ap.add_argument("--preview", action="store_true", help="fast low-quality render")
+    ap.add_argument("--layout", choices=["full", "pip"], default="full",
+                    help="full: clip fills the frame. pip: she stays on screen (her footage from while the clip played) "
+                         "and the clip plays in a box in the top corner away from her face, with the clip's sound")
+    ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 540x675 in the top corner opposite her face)")
+    ap.add_argument("--clip-crop-y", type=float, default=0.05, help="pip: top of the clip's 4:5 crop, as a fraction of its height")
     a = ap.parse_args()
     W = a.workdir
     edl = json.load(open(os.path.join(W, "edl.json")))
@@ -124,20 +129,45 @@ def main():
     x = int(min(780, max(300, face.get("x", 270) + face.get("w", 540) / 2))) if face else 540
     n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x)
     # filter graph
-    nm = sum(p["type"] == "me" for p in pieces); nc = len(pieces) - nm
+    nc = sum(p["type"] == "clip" for p in pieces)
+    pip = a.layout == "pip" and has_clip
+    if pip:
+        # her footage under each clip piece = the moment of her recording where that clip part played
+        runs = an.get("clip_runs") or []
+        for p in pieces:
+            if p["type"] != "clip": continue
+            r = min(runs, key=lambda r: 0 if r["clip_start"] - 0.05 <= p["clip_in"] <= r["clip_end"] + 0.05 else abs(r["clip_start"] - p["clip_in"]))
+            p["bg_in"] = q(max(0.0, r["me_start"] + (p["clip_in"] - r["clip_start"])))
+        if a.box:
+            bw, bh, bx, by = map(int, a.box.split(","))
+        else:
+            bw, bh = 540, 675
+            fx = face.get("x", 270) + face.get("w", 540) / 2 if face else 540
+            bx = 1080 - bw - 24 if fx < 540 else 24
+            by = 110
+    nma = sum(p["type"] == "me" for p in pieces)          # her audio pieces
+    nm = nma + (nc if pip else 0)                          # her video pieces (+ backgrounds under pip clips)
     g = [f"[0:v]split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else "[0:v]null[mv0]",
-         f"[0:a]asplit={nm}" + "".join(f"[ma{i}]" for i in range(nm)) if nm > 1 else "[0:a]anull[ma0]",
+         f"[0:a]asplit={nma}" + "".join(f"[ma{i}]" for i in range(nma)) if nma > 1 else "[0:a]anull[ma0]",
          f"[1:v]split={nc}" + "".join(f"[cv{i}]" for i in range(nc)) if nc > 1 else "[1:v]null[cv0]",
          f"[1:a]asplit={nc}" + "".join(f"[ca{i}]" for i in range(nc)) if nc > 1 else "[1:a]anull[ca0]"]
     if nc == 0: g = g[:2]
-    cat, im, ic = "", 0, 0
+    cat, im, ic, ia = "", 0, 0, 0
     for k, p in enumerate(pieces):
         if p["type"] == "me":
-            s, e, v, au = p["in"], p["out"], f"mv{im}", f"ma{im}"; im += 1
+            s, e, v, au = p["in"], p["out"], f"mv{im}", f"ma{ia}"; im += 1; ia += 1
         else:
             s, e, v, au = p["clip_in"], p["clip_out"], f"cv{ic}", f"ca{ic}"; ic += 1
         d = e - s
-        g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{k}]")
+        if p["type"] == "clip" and pip:
+            bg = f"mv{im}"; im += 1
+            b0 = p["bg_in"]
+            g.append(f"[{bg}]trim=start={b0}:end={b0 + d:.4f},setpts=PTS-STARTPTS[bg{k}]")
+            g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS,crop=1080:1350:0:{int(a.clip_crop_y * 1920)},"
+                     f"scale={bw}:{bh},setsar=1[bx{k}]")
+            g.append(f"[bg{k}][bx{k}]overlay={bx}:{by}:shortest=1,trim=duration={d:.4f},setpts=PTS-STARTPTS[v{k}]")
+        else:
+            g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{k}]")
         g.append(f"[{au}]atrim=start={s}:end={e},asetpts=PTS-STARTPTS,"
                  f"afade=t=in:d=0.008,afade=t=out:st={max(0, d - 0.008):.4f}:d=0.008[a{k}]")
         cat += f"[v{k}][a{k}]"
