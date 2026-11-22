@@ -64,6 +64,38 @@ def content_crop_y(path):
     return float(min(max(0.0, y), 1 - win))
 
 
+def subject_crop(path, times):
+    """Coach's rule (22 Nov): show the clip's speaker from about the belly/waist to the top of the head,
+    not the ceiling, fan, lights or on-screen titles above them. Finds the speaker's face on frames taken
+    inside the clip parts that are used, and returns a 4:5 crop (w, h, x, y) in the 1080x1920 clip:
+    a little headroom above the head, down to roughly the belly. None when no face is found (animals,
+    landscapes, films), in which case the picture-area crop is used."""
+    try:
+        import cv2, numpy as np
+    except Exception:
+        return None
+    casc = cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml"))
+    boxes = []
+    for t in times:
+        r = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.2f}", "-i", path, "-frames:v", "1", "-f", "image2pipe",
+                            "-vcodec", "png", "-"], capture_output=True).stdout
+        img = cv2.imdecode(np.frombuffer(r, np.uint8), cv2.IMREAD_GRAYSCALE) if r else None
+        if img is None: continue
+        f = casc.detectMultiScale(img, 1.1, 6, minSize=(90, 90))
+        if len(f):
+            boxes.append(max(f, key=lambda b: b[2] * b[3]))
+    if len(boxes) < max(2, len(times) // 3):
+        return None
+    x, y, w, h = [float(np.median([b[k] for b in boxes])) for k in range(4)]
+    ch = min(1350.0, 4.6 * h)                  # ~0.65 face-heights of headroom above the brow, down to the belly
+    cw = ch * 4 / 5
+    top = y - 0.65 * h
+    cx = x + w / 2 - cw / 2
+    cx = min(max(0.0, cx), 1080 - cw); top = min(max(0.0, top), 1920 - ch)
+    ev = lambda v: int(v) // 2 * 2
+    return ev(cw), ev(ch), ev(cx), ev(top)
+
+
 def ass_time(t):
     t = max(0, t); h = int(t // 3600); m = int(t % 3600 // 60); s = t % 60
     return f"{h}:{m:02d}:{s:05.2f}"
@@ -78,8 +110,9 @@ def text_width(text, size, font_file="/usr/share/fonts/opentype/inter/Inter-Blac
 
 
 def captions(pieces, words, y, font, size, path, x=540, fit=None):
-    """fit=(t_end, right_edge): captions starting before t_end (the hook, while the frozen clip box is on
-    screen) must stay left of right_edge; they slide left and, only if needed, shrink (never below 60 px)."""
+    """fit=(t_end, lo, hi): captions starting before t_end (the hook, while the frozen clip box is on
+    screen) must stay between x=lo and x=hi (beside the box); they slide over and, only if needed,
+    shrink (never below 60 px)."""
     by_id = {w["i"]: w for w in words}
     ev, t_out = [], 0.0
     # Words of consecutive creator pieces flow together (a jump cut inside a sentence
@@ -130,7 +163,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if e - s < 0.05: continue
             tags = f"\\pos({x},{y})"
             if fit and s < fit[0] - 0.01:
-                lo, hi = 40, fit[1] - 24
+                lo, hi = fit[1], fit[2]
                 fs = size
                 while fs > 60 and text_width(t, fs) > hi - lo:
                     fs -= 2
@@ -151,8 +184,11 @@ def main():
     ap.add_argument("--layout", choices=["full", "pip"], default="pip",
                     help="full: clip fills the frame. pip: she stays on screen (her footage from while the clip played) "
                          "and the clip plays in a box in the top corner away from her face, with the clip's sound")
-    ap.add_argument("--cta", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "follow_cta.mov"),
-                    help="looping follow-button animation shown top-left for the whole video ('none' to switch off)")
+    ap.add_argument("--cta", default="none",
+                    help="follow-button animation top-left (assets/follow_cta.mov). OFF by default: her coach asked to hide it "
+                         "until after 60 days of one-on-one coaching (from 22 Nov 2026). Pass the .mov path to switch it on")
+    ap.add_argument("--clip-crop", default="subject", choices=["subject", "picture"],
+                    help="subject: crop the clip to its speaker, belly to top of head (coach's rule); picture: whole picture area")
     ap.add_argument("--hook-freeze", default="on", choices=["on", "off"],
                     help="while she talks before the first clip part (the hook), show the clip frozen in its box")
     ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 540x675 in the top corner opposite her face)")
@@ -220,10 +256,24 @@ def main():
             bh = int(min(860, fy + 0.2 * fh) - by) // 2 * 2
             bw = int(bh * 4 / 5) // 2 * 2
             fx = face.get("x", 270) + face.get("w", 540) / 2 if face else 540
-            bx = 1080 - bw - 24 if (fx <= 560 or use_cta) else 24   # CTA owns the top-left corner
-        if a.clip_crop_y is None:
-            a.clip_crop_y = content_crop_y(cl_m)
-        print(f"pip box {bw}x{bh} at {bx},{by}, clip crop from {a.clip_crop_y:.2f} of its height")
+            # top-right unless her face is clearly on the right half (the CTA, when on, owns the top-left)
+            bx = 1080 - bw - 24 if (fx <= 620 or use_cta) else 24
+        crop = None
+        if a.clip_crop == "subject" and a.clip_crop_y is None:
+            ts = []
+            for p in pieces:
+                if p["type"] == "clip":
+                    ts += [p["clip_in"] + (p["clip_out"] - p["clip_in"]) * f for f in (0.15, 0.5, 0.85)]
+            crop = subject_crop(cl_m, ts[:12])
+        if crop:
+            cw, ch, cx, cy = crop
+            box_crop = f"crop={cw}:{ch}:{cx}:{cy}"
+            print(f"pip box {bw}x{bh} at {bx},{by}, clip cropped to the speaker: {cw}x{ch} at {cx},{cy}")
+        else:
+            if a.clip_crop_y is None:
+                a.clip_crop_y = content_crop_y(cl_m)
+            box_crop = f"crop=1080:1350:0:{int(a.clip_crop_y * 1920)}"
+            print(f"pip box {bw}x{bh} at {bx},{by}, no speaker found: clip crop from {a.clip_crop_y:.2f} of its height")
     # RULE (coach, 22 Nov): when she opens with her own words (the hook, before the first clip part),
     # the clip she is reacting to sits FROZEN in its box on the frame it will start from; it plays only
     # once she stops talking.
@@ -238,9 +288,9 @@ def main():
     if hook and first_clip:
         still = os.path.join(W, "hook_still.png")
         sh(["ffmpeg", "-y", "-ss", f"{first_clip['clip_in'] + 0.04:.3f}", "-i", cl_m, "-frames:v", "1", "-vf",
-            f"crop=1080:1350:0:{int(a.clip_crop_y * 1920)},scale={bw}:{bh},setsar=1", still])
+            f"{box_crop},scale={bw}:{bh},setsar=1", still])
         print(f"hook: clip frozen in its box for the first {hook_end:.1f}s while she talks")
-    n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x, fit=(hook_end, bx) if still else None)
+    n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x, fit=((hook_end, 40, bx - 24) if bx + bw / 2 > 540 else (hook_end, bx + bw + 24, 1040)) if still else None)
     nma = sum(p["type"] == "me" for p in pieces)          # her audio pieces
     nm = nma + (nc if pip else 0)                          # her video pieces (+ backgrounds under pip clips)
     g = [f"[0:v]split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else "[0:v]null[mv0]",
@@ -264,7 +314,7 @@ def main():
             bg = f"mv{im}"; im += 1
             b0, b1 = p["bg_in"], p["bg_out"]
             g.append(f"[{bg}]trim=start={b0}:end={b1},setpts=(PTS-STARTPTS)*{d / (b1 - b0):.5f},fps=30[bg{k}]")
-            g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS,crop=1080:1350:0:{int(a.clip_crop_y * 1920)},"
+            g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS,{box_crop},"
                      f"scale={bw}:{bh},setsar=1[bx{k}]")
             g.append(f"[bg{k}][bx{k}]overlay={bx}:{by}:shortest=1,trim=duration={d:.4f},setpts=PTS-STARTPTS[v{k}]")
         elif still and k in hook:
