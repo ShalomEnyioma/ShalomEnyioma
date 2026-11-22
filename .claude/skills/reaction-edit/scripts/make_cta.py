@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build the follow-button CTA: a red TikTok-style "Follow" button pops up, a cursor glides to it,
-clicks, the button turns to "Following", then everything fades. 2-second loop, no other words
+clicks, the button turns to "Following", then everything fades. plays for 2 s once every 10 s, no other words
 (TikTok penalises "follow my account" style text, so the CTA only shows the button itself).
 
   python3 make_cta.py <outdir>
@@ -11,7 +11,8 @@ writes   <outdir>/follow_cta.mov        transparent loop (qtrle, alpha) used by 
 import math, os, subprocess, sys, tempfile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-FPS, SECONDS = 30, 2.0
+FPS, SECONDS = 30, 2.0     # the animation itself
+CYCLE = 10.0               # it appears once every 10 s (creator's rule, 22 Nov); hidden the rest of the time
 W, H = 460, 200            # overlay size in the 1080x1920 frame
 SS = 3                     # supersampling for smooth edges
 RED, GREY, DARK = (254, 44, 85), (241, 241, 242), (22, 24, 35)
@@ -94,8 +95,9 @@ def main():
     os.makedirs(out, exist_ok=True)
     n = int(FPS * SECONDS)
     with tempfile.TemporaryDirectory() as tmp:
-        for i in range(n):
-            frame(i, n).save(os.path.join(tmp, f"f{i:03d}.png"))
+        blank = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        for i in range(int(FPS * CYCLE)):
+            (frame(i, n) if i < n else blank).save(os.path.join(tmp, f"f{i:03d}.png"))
         seq = os.path.join(tmp, "f%03d.png")
         run = lambda a: subprocess.run(["ffmpeg", "-v", "error", "-y"] + a, check=True)
         run(["-framerate", str(FPS), "-i", seq, "-c:v", "qtrle", "-pix_fmt", "argb", os.path.join(out, "follow_cta.mov")])
