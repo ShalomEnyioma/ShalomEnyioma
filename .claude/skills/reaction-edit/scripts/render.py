@@ -69,7 +69,17 @@ def ass_time(t):
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
-def captions(pieces, words, y, font, size, path, x=540):
+def text_width(text, size, font_file="/usr/share/fonts/opentype/inter/Inter-Black.otf"):
+    try:
+        from PIL import ImageFont
+        return ImageFont.truetype(font_file, size).getlength(text) + 2 * len(text) + 16   # + spacing + outline
+    except Exception:
+        return 0.62 * size * len(text)
+
+
+def captions(pieces, words, y, font, size, path, x=540, fit=None):
+    """fit=(t_end, right_edge): captions starting before t_end (the hook, while the frozen clip box is on
+    screen) must stay left of right_edge; they slide left and, only if needed, shrink (never below 60 px)."""
     by_id = {w["i"]: w for w in words}
     ev, t_out = [], 0.0
     # Words of consecutive creator pieces flow together (a jump cut inside a sentence
@@ -118,7 +128,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(head)
         for s, e, t in ev:
             if e - s < 0.05: continue
-            f.write(f"Dialogue: 0,{ass_time(s)},{ass_time(e)},Cap,,0,0,0,,{{\\pos({x},{y})}}{t}\n")
+            tags = f"\\pos({x},{y})"
+            if fit and s < fit[0] - 0.01:
+                lo, hi = 40, fit[1] - 24
+                fs = size
+                while fs > 60 and text_width(t, fs) > hi - lo:
+                    fs -= 2
+                w = text_width(t, fs)
+                cx = int(min(max(x, lo + w / 2), hi - w / 2))
+                tags = f"\\pos({cx},{y})" + (f"\\fs{fs}" if fs != size else "")
+            f.write(f"Dialogue: 0,{ass_time(s)},{ass_time(e)},Cap,,0,0,0,,{{{tags}}}{t}\n")
     return len(ev)
 
 
@@ -134,6 +153,8 @@ def main():
                          "and the clip plays in a box in the top corner away from her face, with the clip's sound")
     ap.add_argument("--cta", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "follow_cta.mov"),
                     help="looping follow-button animation shown top-left for the whole video ('none' to switch off)")
+    ap.add_argument("--hook-freeze", default="on", choices=["on", "off"],
+                    help="while she talks before the first clip part (the hook), show the clip frozen in its box")
     ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 540x675 in the top corner opposite her face)")
     ap.add_argument("--clip-crop-y", type=float, default=None, help="pip: top of the clip's 4:5 crop, as a fraction of its height (default: centred on the clip's picture, skipping black bars)")
     a = ap.parse_args()
@@ -157,7 +178,6 @@ def main():
     ass = os.path.join(W, "captions.ass")
     # centre the caption over her head (she isn't always in the middle of the frame)
     x = int(min(780, max(300, face.get("x", 270) + face.get("w", 540) / 2))) if face else 540
-    n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x)
     # filter graph
     nc = sum(p["type"] == "clip" for p in pieces)
     pip = a.layout == "pip" and has_clip
@@ -204,6 +224,23 @@ def main():
         if a.clip_crop_y is None:
             a.clip_crop_y = content_crop_y(cl_m)
         print(f"pip box {bw}x{bh} at {bx},{by}, clip crop from {a.clip_crop_y:.2f} of its height")
+    # RULE (coach, 22 Nov): when she opens with her own words (the hook, before the first clip part),
+    # the clip she is reacting to sits FROZEN in its box on the frame it will start from; it plays only
+    # once she stops talking.
+    hook = []
+    if pip and a.hook_freeze != "off":
+        for k, p in enumerate(pieces):
+            if p["type"] == "clip": break
+            hook.append(k)
+    first_clip = next((p for p in pieces if p["type"] == "clip"), None)
+    hook_end = sum(pieces[k]["_dur"] for k in hook)
+    still = None
+    if hook and first_clip:
+        still = os.path.join(W, "hook_still.png")
+        sh(["ffmpeg", "-y", "-ss", f"{first_clip['clip_in'] + 0.04:.3f}", "-i", cl_m, "-frames:v", "1", "-vf",
+            f"crop=1080:1350:0:{int(a.clip_crop_y * 1920)},scale={bw}:{bh},setsar=1", still])
+        print(f"hook: clip frozen in its box for the first {hook_end:.1f}s while she talks")
+    n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x, fit=(hook_end, bx) if still else None)
     nma = sum(p["type"] == "me" for p in pieces)          # her audio pieces
     nm = nma + (nc if pip else 0)                          # her video pieces (+ backgrounds under pip clips)
     g = [f"[0:v]split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else "[0:v]null[mv0]",
@@ -211,6 +248,11 @@ def main():
          f"[1:v]split={nc}" + "".join(f"[cv{i}]" for i in range(nc)) if nc > 1 else "[1:v]null[cv0]",
          f"[1:a]asplit={nc}" + "".join(f"[ca{i}]" for i in range(nc)) if nc > 1 else "[1:a]anull[ca0]"]
     if nc == 0: g = g[:2]
+    still_in = (2 if has_clip else 1) if still else None
+    if still and len(hook) > 1:
+        g.append(f"[{still_in}:v]split={len(hook)}" + "".join(f"[st{i}]" for i in range(len(hook))))
+    elif still:
+        g.append(f"[{still_in}:v]null[st0]")
     cat, im, ic, ia = "", 0, 0, 0
     for k, p in enumerate(pieces):
         if p["type"] == "me":
@@ -225,6 +267,9 @@ def main():
             g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS,crop=1080:1350:0:{int(a.clip_crop_y * 1920)},"
                      f"scale={bw}:{bh},setsar=1[bx{k}]")
             g.append(f"[bg{k}][bx{k}]overlay={bx}:{by}:shortest=1,trim=duration={d:.4f},setpts=PTS-STARTPTS[v{k}]")
+        elif still and k in hook:
+            g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS[hb{k}]")
+            g.append(f"[hb{k}][st{hook.index(k)}]overlay={bx}:{by}:shortest=1,trim=duration={d:.4f},setpts=PTS-STARTPTS[v{k}]")
         else:
             g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{k}]")
         g.append(f"[{au}]atrim=start={s}:end={e},asetpts=PTS-STARTPTS,"
@@ -232,7 +277,7 @@ def main():
         cat += f"[v{k}][a{k}]"
     g.append(f"{cat}concat=n={len(pieces)}:v=1:a=1[vc][ac]")
     if use_cta:
-        cta_in = 2 if has_clip else 1
+        cta_in = (2 if has_clip else 1) + (1 if still else 0)
         g.append(f"[vc]subtitles={ass}:fontsdir={a.fontsdir}[vs]")
         g.append(f"[{cta_in}:v]format=argb[cta]")
         g.append("[vs][cta]overlay=x=30:y=200:shortest=0:eof_action=pass:format=auto,format=yuv420p[vout]")
@@ -240,7 +285,8 @@ def main():
         g.append(f"[vc]subtitles={ass}:fontsdir={a.fontsdir}[vout]")
     g.append("[ac]alimiter=limit=0.95[aout]")
     cta_args = ["-stream_loop", "-1", "-i", a.cta] if use_cta else []
-    sh(["ffmpeg", "-y", "-i", me_m] + (["-i", cl_m] if has_clip else []) + cta_args + ["-t", f"{sum(p['_dur'] for p in pieces):.3f}", "-filter_complex", ";".join(g), "-map", "[vout]", "-map", "[aout]",
+    still_args = ["-loop", "1", "-framerate", str(FPS), "-i", still] if still else []
+    sh(["ffmpeg", "-y", "-i", me_m] + (["-i", cl_m] if has_clip else []) + still_args + cta_args + ["-t", f"{sum(p['_dur'] for p in pieces):.3f}", "-filter_complex", ";".join(g), "-map", "[vout]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "ultrafast" if a.preview else "medium", "-crf", "28" if a.preview else "19",
         "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(FPS),
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", a.out])
