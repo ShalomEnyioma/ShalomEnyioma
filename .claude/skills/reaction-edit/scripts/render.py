@@ -132,6 +132,8 @@ def main():
     ap.add_argument("--layout", choices=["full", "pip"], default="pip",
                     help="full: clip fills the frame. pip: she stays on screen (her footage from while the clip played) "
                          "and the clip plays in a box in the top corner away from her face, with the clip's sound")
+    ap.add_argument("--cta", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "follow_cta.mov"),
+                    help="looping follow-button animation shown top-left for the whole video ('none' to switch off)")
     ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 540x675 in the top corner opposite her face)")
     ap.add_argument("--clip-crop-y", type=float, default=None, help="pip: top of the clip's 4:5 crop, as a fraction of its height (default: centred on the clip's picture, skipping black bars)")
     a = ap.parse_args()
@@ -159,6 +161,7 @@ def main():
     # filter graph
     nc = sum(p["type"] == "clip" for p in pieces)
     pip = a.layout == "pip" and has_clip
+    use_cta = bool(a.cta) and a.cta != "none" and os.path.exists(a.cta)
     if pip:
         # her footage under each clip piece = the moment of her recording where that clip part played
         # RULE: while the clip plays she is only watching. Her footage under the box must come from the
@@ -197,7 +200,7 @@ def main():
             bh = int(min(860, fy + 0.2 * fh) - by) // 2 * 2
             bw = int(bh * 4 / 5) // 2 * 2
             fx = face.get("x", 270) + face.get("w", 540) / 2 if face else 540
-            bx = 1080 - bw - 24 if fx <= 560 else 24
+            bx = 1080 - bw - 24 if (fx <= 560 or use_cta) else 24   # CTA owns the top-left corner
         if a.clip_crop_y is None:
             a.clip_crop_y = content_crop_y(cl_m)
         print(f"pip box {bw}x{bh} at {bx},{by}, clip crop from {a.clip_crop_y:.2f} of its height")
@@ -228,9 +231,16 @@ def main():
                  f"afade=t=in:d=0.008,afade=t=out:st={max(0, d - 0.008):.4f}:d=0.008[a{k}]")
         cat += f"[v{k}][a{k}]"
     g.append(f"{cat}concat=n={len(pieces)}:v=1:a=1[vc][ac]")
-    g.append(f"[vc]subtitles={ass}:fontsdir={a.fontsdir}[vout]")
+    if use_cta:
+        cta_in = 2 if has_clip else 1
+        g.append(f"[vc]subtitles={ass}:fontsdir={a.fontsdir}[vs]")
+        g.append(f"[{cta_in}:v]format=argb[cta]")
+        g.append("[vs][cta]overlay=x=30:y=200:shortest=0:eof_action=pass:format=auto,format=yuv420p[vout]")
+    else:
+        g.append(f"[vc]subtitles={ass}:fontsdir={a.fontsdir}[vout]")
     g.append("[ac]alimiter=limit=0.95[aout]")
-    sh(["ffmpeg", "-y", "-i", me_m] + (["-i", cl_m] if has_clip else []) + ["-filter_complex", ";".join(g), "-map", "[vout]", "-map", "[aout]",
+    cta_args = ["-stream_loop", "-1", "-i", a.cta] if use_cta else []
+    sh(["ffmpeg", "-y", "-i", me_m] + (["-i", cl_m] if has_clip else []) + cta_args + ["-t", f"{sum(p['_dur'] for p in pieces):.3f}", "-filter_complex", ";".join(g), "-map", "[vout]", "-map", "[aout]",
         "-c:v", "libx264", "-preset", "ultrafast" if a.preview else "medium", "-crf", "28" if a.preview else "19",
         "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", str(FPS),
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", a.out])
