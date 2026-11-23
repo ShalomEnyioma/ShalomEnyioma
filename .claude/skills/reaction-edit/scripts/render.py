@@ -104,7 +104,7 @@ def ass_time(t):
 def text_width(text, size, font_file="/usr/share/fonts/opentype/inter/Inter-Black.otf"):
     try:
         from PIL import ImageFont
-        return ImageFont.truetype(font_file, size).getlength(text) + 2 * len(text) + 16   # + spacing + outline
+        return 1.22 * ImageFont.truetype(font_file, size).getlength(text) + 2 * len(text) + 20   # libass scale + spacing + outline
     except Exception:
         return 0.62 * size * len(text)
 
@@ -132,6 +132,11 @@ def captions(pieces, words, y, font, size, path, x=540, fit=None):
     for run in runs:
         chunk = []
         for k, w in enumerate(run):
+            # during the hook (frozen box beside her) start a new chunk before it gets too wide to fit
+            if fit and chunk and w["text"] and w["s"] < fit[0] - 0.01:
+                wide = " ".join([c["text"] for c in chunk] + [w["text"]])
+                if text_width(wide, 66) > (fit[2] - fit[1]) and w["s"] - chunk[0]["s"] > 0.15:
+                    ev.append((chunk[0]["s"], w["s"], " ".join(c["text"] for c in chunk).strip(" ,"))); chunk = []
             if w["text"]: chunk.append(w)
             text = " ".join(c["text"] for c in chunk)
             last = k + 1 == len(run)
@@ -165,7 +170,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if fit and s < fit[0] - 0.01:
                 lo, hi = fit[1], fit[2]
                 fs = size
-                while fs > 60 and text_width(t, fs) > hi - lo:
+                while fs > 56 and text_width(t, fs) > hi - lo:
                     fs -= 2
                 w = text_width(t, fs)
                 cx = int(min(max(x, lo + w / 2), hi - w / 2))
