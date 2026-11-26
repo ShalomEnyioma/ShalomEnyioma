@@ -100,6 +100,10 @@ Read the analyze.py transcript top to bottom like an editor:
 - `--layout full`: the clip fills the frame. Only if she asks for it.
 - Check every pip render with a face strip (her face every ~1 s through every clip part): mouth closed or reacting (smile, frown, gasp), never talking; she must not be leaning out of frame. Also check the same clip line never plays twice (drop replay pieces that repeat a line already played). Check frames: the box must sit over the wall or her hair, never over her eyes or mouth. Then run the face-strip check from rule 8.
 
+- **Quiet recordings**: when her voice is soft (edl.py prints the threshold; words go missing from WORDS or the output), rerun edl.py with `--thr -48` (any value above the pauses' noise, usually -60..-70 dB). Word ids change: re-read WORDS before `--cut`/`--say`.
+- **Clip watched with the sound off** (she looks down at her phone in silent pauses, then narrates): map each pause to the matching part of the clip by the PICTURE (contact sheet of the clip every 0.5 s vs. what she says next), set those as `clip_runs`, and use `--clip-no-trim`.
+- **The saved clip doesn't match what she played** (different dialogue or a different video of the same story): find the version she played. If its first poster can't be traced, cut the clean part from the reaction copy she used, remove the TikTok watermark with `delogo`, keep the reactor's face box out of the pip crop (`--clip-crop-y`), and credit "original creator unknown".
+
 ### Check before delivering
 
 0. **Silence check**: `check_gaps.py OUT.mp4 -45` must list no gaps inside her pieces (it maps output times; compare with the piece list). Fix and re-render if it does.

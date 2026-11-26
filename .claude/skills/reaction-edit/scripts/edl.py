@@ -101,6 +101,7 @@ def main():
     ap.add_argument("--cut-time", default="", help="rec-time ranges to remove, e.g. 82.9-86.6,90-91.2")
     ap.add_argument("--say", action="append", default=[], help="ID=TEXT caption fix; ID= hides the word")
     ap.add_argument("--bridge", type=float, default=0.07)
+    ap.add_argument("--thr", type=float, default=None, help="speech threshold in dB (default: auto). Lower it for a quiet recording whose soft words fall under the auto threshold; keep it above the pauses' noise")
     ap.add_argument("--clip-no-trim", action="store_true", help="never trim clip edges (auto when the clip has no speech)")
     ap.add_argument("--pre", type=float, default=0.02)
     ap.add_argument("--post", type=float, default=0.04)
@@ -117,6 +118,7 @@ def main():
     # ---- creator speech mask
     floor, level = np.percentile(env, 10), np.percentile(env, 90)
     thr = max(floor + 30, level - 27)   # breaths and room tails (~-44 dB) count as silence
+    if a.thr is not None: thr = a.thr
     runs_clip = sorted(an["clip_runs"], key=lambda r: r["me_start"])
     allowed = np.ones(len(env), bool)
     for r in runs_clip:
