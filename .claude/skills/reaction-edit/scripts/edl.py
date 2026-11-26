@@ -152,18 +152,27 @@ def main():
     for w in words: seg_words.setdefault(w["seg"], []).append(w)
     # A burst with no word of its own is kept when it touches speech (it is the end or
     # start of a neighbouring word, e.g. "what | happens"); only isolated bursts are noise.
-    keep = []
-    for k, sg in enumerate(segs):
-        key = (sg[0], sg[1])
-        if key in seg_words:
-            keep.append(sg); continue
-        cut_ids = ids(a.cut)
-        nb = [segs[j] for j in (k - 1, k + 1) if 0 <= j < len(segs) and (segs[j][0], segs[j][1]) in seg_words
-              and any(w["i"] not in cut_ids for w in seg_words[(segs[j][0], segs[j][1])])   # touches KEPT speech
-              and (abs(segs[j][1] - sg[0]) < 0.25 or abs(sg[1] - segs[j][0]) < 0.25)]
-        if nb:
-            seg_words[key] = []; keep.append(sg)
-    segs = keep
+    # The recogniser sometimes stamps a word a little early, so the sound of the word itself
+    # ("authen-tic") can be a CHAIN of short wordless bursts after the segment that got the word.
+    # Grow outwards from kept speech: a wordless burst within 0.25 s of kept speech (or of a burst
+    # already kept this way) is kept, up to 4 steps / 1.5 s from the speech it hangs off.
+    cut_ids = ids(a.cut)
+    speech = {k for k, sg in enumerate(segs) if (sg[0], sg[1]) in seg_words
+              and any(w["i"] not in cut_ids for w in seg_words[(sg[0], sg[1])])}
+    kept = {k for k, sg in enumerate(segs) if (sg[0], sg[1]) in seg_words}
+    anchor = {k: k for k in speech}
+    for _ in range(4):
+        grown = False
+        for k, sg in enumerate(segs):
+            if k in kept: continue
+            for j in (k - 1, k + 1):
+                if j in anchor and (abs(segs[j][1] - sg[0]) < 0.25 or abs(sg[1] - segs[j][0]) < 0.25):
+                    a0 = segs[anchor[j]]
+                    if max(0.0, sg[0] - a0[1], a0[0] - sg[1]) <= 1.5:
+                        kept.add(k); anchor[k] = anchor[j]; seg_words[(sg[0], sg[1])] = []; grown = True
+                        break
+        if not grown: break
+    segs = [sg for k, sg in enumerate(segs) if k in kept]
 
     # ---- apply word cuts by splitting segments at the quietest frame between words
     cut = ids(a.cut)
