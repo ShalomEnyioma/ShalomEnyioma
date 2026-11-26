@@ -89,7 +89,9 @@ def subject_crop(path, times):
     x, y, w, h = [float(np.median([b[k] for b in boxes])) for k in range(4)]
     ch = min(1350.0, 4.6 * h)                  # ~0.65 face-heights of headroom above the brow, down to the belly
     cw = ch * 4 / 5
-    top = y - 0.65 * h
+    # close-up (the 4:5 box can't reach the belly anyway): keep less headroom, so a title sitting just
+    # above the head stays out of the box (Allow that pepper rest, 26 Nov)
+    top = y - (0.38 if 4.6 * h > 1350 else 0.65) * h
     cx = x + w / 2 - cw / 2
     cx = min(max(0.0, cx), 1080 - cw); top = min(max(0.0, top), 1920 - ch)
     ev = lambda v: int(v) // 2 * 2
