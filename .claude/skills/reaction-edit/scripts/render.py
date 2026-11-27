@@ -199,6 +199,7 @@ def main():
     ap.add_argument("--hook-freeze", default="on", choices=["on", "off"],
                     help="while she talks before the first clip part (the hook), show the clip frozen in its box")
     ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 600x750 in the top-right corner)")
+    ap.add_argument("--clip-crop-rect", default=None, help="pip: exact crop of the clip as W,H,X,Y in its 1080x1920 frame (e.g. to cut letterbox bars)")
     ap.add_argument("--clip-crop-y", type=float, default=None, help="pip: top of the clip's 4:5 crop, as a fraction of its height (default: centred on the clip's picture, skipping black bars)")
     a = ap.parse_args()
     W = a.workdir
@@ -275,6 +276,8 @@ def main():
                 if p["type"] == "clip":
                     ts += [p["clip_in"] + (p["clip_out"] - p["clip_in"]) * f for f in (0.15, 0.5, 0.85)]
             crop = subject_crop(cl_m, ts[:12])
+        if a.clip_crop_rect:
+            crop = tuple(int(v) for v in a.clip_crop_rect.split(","))
         if crop:
             cw, ch, cx, cy = crop
             box_crop = f"crop={cw}:{ch}:{cx}:{cy}"
