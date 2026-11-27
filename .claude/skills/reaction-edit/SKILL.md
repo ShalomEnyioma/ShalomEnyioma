@@ -50,6 +50,8 @@ python3 -I $SK/render.py WORK "<name> - EDITED.mp4"
 
 ## The clip must be the ORIGINAL
 
+**Exception (creator, 27 Nov): when she reacted to a reactor's/pastor's video and says to follow that version, use THAT version's scene, cut out of it** (only the scene area: no reactor face, voice or talking parts; watermark blurred with `delogo`; letterboxed into 1080x1920 and cropped with `--clip-crop-rect`). Her phone then matches it exactly, so every playback syncs by waveform. Always check which copy her phone played before choosing the clip.
+
 If the uploaded clip is someone else's reaction to a video (another person talking over it, an inset, a screen recording of TikTok, a repost or compilation), do NOT use it. Find the original post that footage came from and edit with that: see `references/find-original.md` (search, download through the Composio workbench, save "<title> (original).mp4" to TO BE EDITED, confirm by frames). Credit the original poster.
 
 ## Inputs
