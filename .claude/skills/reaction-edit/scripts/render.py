@@ -202,6 +202,7 @@ def main():
     ap.add_argument("--hook-freeze", default="on", choices=["on", "off"],
                     help="while she talks before the first clip part (the hook), show the clip frozen in its box")
     ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 600x750 in the top-right corner)")
+    ap.add_argument("--watch-zoom", type=float, default=1.3, help="pip: zoom her picture in from the top while she watches the clip, so the phone in her hand (bottom of the frame) is cut off; 1 = off")
     ap.add_argument("--clip-crop-rect", default=None, help="pip: exact crop of the clip as W,H,X,Y in its 1080x1920 frame (e.g. to cut letterbox bars)")
     ap.add_argument("--clip-crop-y", type=float, default=None, help="pip: top of the clip's 4:5 crop, as a fraction of its height (default: centred on the clip's picture, skipping black bars)")
     a = ap.parse_args()
@@ -336,7 +337,11 @@ def main():
         if p["type"] == "clip" and pip:
             bg = f"mv{im}"; im += 1
             b0, b1 = p["bg_in"], p["bg_out"]
-            g.append(f"[{bg}]trim=start={b0}:end={b1},setpts=(PTS-STARTPTS)*{d / (b1 - b0):.5f},fps=30[bg{k}]")
+            zc = ""
+            if a.watch_zoom > 1:      # creator's rule (27 Nov): hide the phone in her hand while she watches
+                zw, zh = int(1080 / a.watch_zoom) // 2 * 2, int(1920 / a.watch_zoom) // 2 * 2
+                zc = f",crop={zw}:{zh}:{(1080 - zw) // 2}:0,scale=1080:1920,setsar=1"
+            g.append(f"[{bg}]trim=start={b0}:end={b1},setpts=(PTS-STARTPTS)*{d / (b1 - b0):.5f},fps=30{zc}[bg{k}]")
             g.append(f"[{v}]trim=start={s}:end={e},setpts=PTS-STARTPTS,{box_crop},"
                      f"scale={bw}:{bh},setsar=1[bx{k}]")
             g.append(f"[bg{k}][bx{k}]overlay={bx}:{by}:shortest=1,trim=duration={d:.4f},setpts=PTS-STARTPTS[v{k}]")
