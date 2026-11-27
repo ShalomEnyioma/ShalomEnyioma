@@ -4,7 +4,7 @@
 set -euo pipefail
 M="${1:-${REACTION_MODELS:-$HOME/.cache/reaction-edit/models}}"
 mkdir -p "$M"
-pip install -q sherpa-onnx scipy "opencv-python-headless<5" numpy
+pip install -q sherpa-onnx scipy "opencv-python-headless<5" numpy noisereduce soundfile
 REL=https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models
 [ -f "$M/silero_vad.onnx" ] || curl -sSL -o "$M/silero_vad.onnx" "$REL/silero_vad.onnx"
 P=sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8   # English ASR with word timestamps

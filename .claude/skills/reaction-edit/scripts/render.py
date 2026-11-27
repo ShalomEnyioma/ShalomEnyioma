@@ -10,7 +10,7 @@
 * Both audio sources are loudness-normalised to -14 LUFS so levels match; every
   cut gets an 8 ms fade so there are no clicks.
 """
-import argparse, json, os, subprocess
+import argparse, sys, json, os, subprocess
 
 FPS = 30
 
@@ -27,16 +27,24 @@ def q(t):  # snap to the frame grid so audio and video cut at the same instant
 
 def mezzanine(src, dst, preview, denoise=False):
     """Upright, constant 30 fps, 1080x1920 cover-crop, starting at t=0, plus normalised 48 kHz audio.
-    denoise (her recording): a LIGHT clean-up only (27 Nov: the strong one damaged her voice and was rejected):
-    rumble below 80 Hz cut and a gentle FFT noise reduction, so her voice is untouched."""
+    denoise (her recording): noise profile learned from her pauses and removed by denoise.py
+    (27 Nov: the creator rejected a heavy FFT/NLM clean-up that swallowed her voice; this one keeps it)."""
     if os.path.exists(dst):
         return
-    sh(["ffmpeg", "-y", "-i", src, "-vf",
+    audio_in, amap = ["-i", src], ["-map", "0:v:0", "-map", "0:a:0"]
+    if denoise:
+        raw, clean = dst + ".raw.wav", dst + ".nr.wav"
+        sh(["ffmpeg", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "48000", "-af", "highpass=f=80", raw])
+        sh([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "denoise.py"), raw, clean])
+        audio_in, amap = ["-i", src, "-i", clean], ["-map", "0:v:0", "-map", "1:a:0"]
+    sh(["ffmpeg", "-y"] + audio_in + amap + ["-vf",
         "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p",
         "-c:v", "libx264", "-preset", "ultrafast" if preview else "veryfast", "-crf", "16",
-        "-af", ("highpass=f=80,afftdn=nr=10:nf=-50:tn=1," if denoise else "highpass=f=70,")
-        + "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "2",
+        "-af", ("" if denoise else "highpass=f=70,") + "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "2",
         "-c:a", "pcm_s16le", "-fps_mode", "cfr", dst])
+    if denoise:
+        for f in (raw, clean):
+            os.remove(f)
 
 
 def content_crop_y(path):
@@ -215,7 +223,7 @@ def main():
     W = a.workdir
     edl = json.load(open(os.path.join(W, "edl.json")))
     an = json.load(open(os.path.join(W, "analysis.json")))
-    me_m, cl_m = os.path.join(W, "me_mezz_light.mkv"), os.path.join(W, "clip_mezz.mkv")
+    me_m, cl_m = os.path.join(W, "me_mezz_nr.mkv"), os.path.join(W, "clip_mezz.mkv")
     mezzanine(edl["reaction"], me_m, a.preview, denoise=True)
     has_clip = bool(edl.get("clip"))           # captions-only videos have no clip
     if has_clip:
