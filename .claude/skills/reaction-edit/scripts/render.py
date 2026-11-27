@@ -171,7 +171,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(head)
         for s, e, t in ev:
             if e - s < 0.05: continue
-            tags = f"\\pos({x},{y})"
+            # keep every caption fully on screen (27 Nov: "discovered a business" ran off the right edge)
+            fs0 = size
+            while fs0 > 44 and text_width(t, fs0) > 1000:
+                fs0 -= 2
+            w0 = text_width(t, fs0)
+            cx0 = int(min(max(x, 40 + w0 / 2), 1040 - w0 / 2))
+            tags = f"\\pos({cx0},{y})" + (f"\\fs{fs0}" if fs0 != size else "")
             if fit and s < fit[0] - 0.01:
                 lo, hi = fit[1], fit[2]
                 fs = size
