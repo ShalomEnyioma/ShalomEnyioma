@@ -114,7 +114,7 @@ def text_width(text, size, font_file="/usr/share/fonts/opentype/inter/Inter-Blac
 def captions(pieces, words, y, font, size, path, x=540, fit=None):
     """fit=(t_end, lo, hi): captions starting before t_end (the hook, while the frozen clip box is on
     screen) must stay between x=lo and x=hi (beside the box); they slide over and, only if needed,
-    shrink (never below 60 px)."""
+    shrink (never below 40 px)."""
     by_id = {w["i"]: w for w in words}
     ev, t_out = [], 0.0
     # Words of consecutive creator pieces flow together (a jump cut inside a sentence
@@ -172,7 +172,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if fit and s < fit[0] - 0.01:
                 lo, hi = fit[1], fit[2]
                 fs = size
-                while fs > 56 and text_width(t, fs) > hi - lo:
+                while fs > 40 and text_width(t, fs) > hi - lo:
                     fs -= 2
                 w = text_width(t, fs)
                 cx = int(min(max(x, lo + w / 2), hi - w / 2))
@@ -198,7 +198,7 @@ def main():
                     help="subject: crop the clip to its speaker, belly to top of head (coach's rule); picture: whole picture area")
     ap.add_argument("--hook-freeze", default="on", choices=["on", "off"],
                     help="while she talks before the first clip part (the hook), show the clip frozen in its box")
-    ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 540x675 in the top corner opposite her face)")
+    ap.add_argument("--box", default=None, help="pip box as W,H,X,Y in px (default: 600x750 in the top-right corner)")
     ap.add_argument("--clip-crop-y", type=float, default=None, help="pip: top of the clip's 4:5 crop, as a fraction of its height (default: centred on the clip's picture, skipping black bars)")
     a = ap.parse_args()
     W = a.workdir
@@ -217,7 +217,14 @@ def main():
             p["clip_in"], p["clip_out"] = q(p["clip_in"]), q(p["clip_out"]); p["_dur"] = round(p["clip_out"] - p["clip_in"], 4)
     pieces = [p for p in pieces if p["_dur"] >= 2 / FPS]
     face = edl.get("face") or {}
-    y = a.caption_y or max(260, (face.get("head_top") or 600) - 30)
+    # creator's rule (26 Nov): big clip box top-right. In pip her whole picture moves down (top filled with a
+    # blurred stretch of the wall) so her eyes sit just below the box; the box only overlaps her hair.
+    shift = 0
+    if a.layout == "pip" and edl.get("clip") and face:
+        eyes = face.get("y", 900) + 0.42 * face.get("h", 450)
+        shift = int(min(420, max(0, 80 + 750 + 140 - eyes))) // 2 * 2
+        if shift: print(f"her picture moved down {shift}px so the clip box clears her eyes")
+    y = a.caption_y or max(260, (face.get("head_top") or 600) - 30 + shift)
     ass = os.path.join(W, "captions.ass")
     # centre the caption over her head (she isn't always in the middle of the frame)
     x = int(min(780, max(300, face.get("x", 270) + face.get("w", 540) / 2))) if face else 540
@@ -257,14 +264,10 @@ def main():
         if a.box:
             bw, bh, bx, by = map(int, a.box.split(","))
         else:
-            # top corner opposite her face; the bottom stays above her forehead, 4:5 like the clip crop
-            by = 160
-            fy, fh = (face.get("y", 900), face.get("h", 450)) if face else (900, 450)
-            bh = int(min(860, fy + 0.2 * fh) - by) // 2 * 2
-            bw = int(bh * 4 / 5) // 2 * 2
-            fx = face.get("x", 270) + face.get("w", 540) / 2 if face else 540
-            # top-right unless her face is clearly on the right half (the CTA, when on, owns the top-left)
-            bx = 1080 - bw - 24 if (fx <= 620 or use_cta) else 24
+            # creator's rule (26 Nov): the clip box is BIG, about a third of the screen, always in the TOP-RIGHT
+            # corner; it may overlap her hair/forehead while she watches. 600x750 (4:5) just under TikTok's top tabs.
+            bw, bh, by = 600, 750, 80
+            bx = 1080 - bw - 24
         crop = None
         if a.clip_crop == "subject" and a.clip_crop_y is None:
             ts = []
@@ -300,7 +303,14 @@ def main():
     n_caps = captions(pieces, an["words"], y, a.font, a.size, ass, x, fit=((hook_end, 40, bx - 24) if bx + bw / 2 > 540 else (hook_end, bx + bw + 24, 1040)) if still else None)
     nma = sum(p["type"] == "me" for p in pieces)          # her audio pieces
     nm = nma + (nc if pip else 0)                          # her video pieces (+ backgrounds under pip clips)
-    g = [f"[0:v]split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else "[0:v]null[mv0]",
+    mv0 = "[0:v]"
+    if shift:
+        g0 = [f"[0:v]split=2[sha][shb]", f"[sha]crop=1080:{1920 - shift}:0:0,pad=1080:1920:0:{shift}[shc]",
+              f"[shb]crop=1080:240:0:0,scale=1080:{shift},boxblur=20:2[shd]", "[shc][shd]overlay=0:0[mshift]"]
+        mv0 = "[mshift]"
+    else:
+        g0 = []
+    g = g0 + [f"{mv0}split={nm}" + "".join(f"[mv{i}]" for i in range(nm)) if nm > 1 else f"{mv0}null[mv0]",
          f"[0:a]asplit={nma}" + "".join(f"[ma{i}]" for i in range(nma)) if nma > 1 else "[0:a]anull[ma0]",
          f"[1:v]split={nc}" + "".join(f"[cv{i}]" for i in range(nc)) if nc > 1 else "[1:v]null[cv0]",
          f"[1:a]asplit={nc}" + "".join(f"[ca{i}]" for i in range(nc)) if nc > 1 else "[1:a]anull[ca0]"]
