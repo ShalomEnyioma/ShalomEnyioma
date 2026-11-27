@@ -208,8 +208,8 @@ def main():
     W = a.workdir
     edl = json.load(open(os.path.join(W, "edl.json")))
     an = json.load(open(os.path.join(W, "analysis.json")))
-    me_m, cl_m = os.path.join(W, "me_mezz_dn.mkv"), os.path.join(W, "clip_mezz.mkv")
-    mezzanine(edl["reaction"], me_m, a.preview, denoise=True)
+    me_m, cl_m = os.path.join(W, "me_mezz.mkv"), os.path.join(W, "clip_mezz.mkv")
+    mezzanine(edl["reaction"], me_m, a.preview)
     has_clip = bool(edl.get("clip"))           # captions-only videos have no clip
     if has_clip:
         mezzanine(edl["clip"], cl_m, a.preview)
