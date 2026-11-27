@@ -25,14 +25,17 @@ def q(t):  # snap to the frame grid so audio and video cut at the same instant
     return round(round(t * FPS) / FPS, 4)
 
 
-def mezzanine(src, dst, preview):
-    """Upright, constant 30 fps, 1080x1920 cover-crop, starting at t=0, plus normalised 48 kHz audio."""
+def mezzanine(src, dst, preview, denoise=False):
+    """Upright, constant 30 fps, 1080x1920 cover-crop, starting at t=0, plus normalised 48 kHz audio.
+    denoise (her recording): creator's complaint 27 Nov "too much noise in the background": cut the hum
+    below 100 Hz and the hiss above 11 kHz, then FFT + non-local-means noise reduction before loudness."""
     if os.path.exists(dst):
         return
     sh(["ffmpeg", "-y", "-i", src, "-vf",
         "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,format=yuv420p",
         "-c:v", "libx264", "-preset", "ultrafast" if preview else "veryfast", "-crf", "16",
-        "-af", "highpass=f=70,loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "2",
+        "-af", ("highpass=f=100,lowpass=f=11000,afftdn=nr=30:nf=-45:tn=1,anlmdn=s=7," if denoise else "highpass=f=70,")
+        + "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "2",
         "-c:a", "pcm_s16le", "-fps_mode", "cfr", dst])
 
 
@@ -205,8 +208,8 @@ def main():
     W = a.workdir
     edl = json.load(open(os.path.join(W, "edl.json")))
     an = json.load(open(os.path.join(W, "analysis.json")))
-    me_m, cl_m = os.path.join(W, "me_mezz.mkv"), os.path.join(W, "clip_mezz.mkv")
-    mezzanine(edl["reaction"], me_m, a.preview)
+    me_m, cl_m = os.path.join(W, "me_mezz_dn.mkv"), os.path.join(W, "clip_mezz.mkv")
+    mezzanine(edl["reaction"], me_m, a.preview, denoise=True)
     has_clip = bool(edl.get("clip"))           # captions-only videos have no clip
     if has_clip:
         mezzanine(edl["clip"], cl_m, a.preview)

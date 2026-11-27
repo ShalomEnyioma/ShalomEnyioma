@@ -100,11 +100,11 @@ def main():
     ap.add_argument("--cut", default="", help="word ids to remove (wrong takes, editor instructions)")
     ap.add_argument("--cut-time", default="", help="rec-time ranges to remove, e.g. 82.9-86.6,90-91.2")
     ap.add_argument("--say", action="append", default=[], help="ID=TEXT caption fix; ID= hides the word")
-    ap.add_argument("--bridge", type=float, default=0.07)
+    ap.add_argument("--bridge", type=float, default=0.2)   # 27 Nov: keep tiny in-sentence gaps (<0.2 s), cutting them was choppy
     ap.add_argument("--thr", type=float, default=None, help="speech threshold in dB (default: auto). Lower it for a quiet recording whose soft words fall under the auto threshold; keep it above the pauses' noise")
     ap.add_argument("--clip-no-trim", action="store_true", help="never trim clip edges (auto when the clip has no speech)")
-    ap.add_argument("--pre", type=float, default=0.02)
-    ap.add_argument("--post", type=float, default=0.04)
+    ap.add_argument("--pre", type=float, default=0.04)
+    ap.add_argument("--post", type=float, default=0.08)
     ap.add_argument("--models", default=os.environ.get("REACTION_MODELS", os.path.expanduser("~/.cache/reaction-edit/models")))
     a = ap.parse_args()
     W = a.workdir
